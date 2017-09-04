@@ -1,0 +1,678 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0304
+header_name {.h}
+code_name {.cxx}
+decl {\#include <iostream>} {private local
+}
+
+decl {\#include <Fl/Fl_File_Chooser.h>} {private local
+}
+
+decl {\#include <string>} {private local
+}
+
+decl {\#include <vector>} {private local
+}
+
+decl {\#include <utility>} {private local
+}
+
+decl {\#include <algorithm>} {private local
+}
+
+decl {\#include <fstream>} {private local
+}
+
+decl {\#include <unistd.h>} {private local
+}
+
+decl {\#include <sys/types.h>} {private local
+}
+
+decl {\#include <pwd.h>} {private local
+}
+
+decl {std::vector<std::pair<std::string, std::string> > config_values;} {private local
+}
+
+Function {remove_all_of_key(std::string key)} {open private
+} {
+  code {for (auto it = config_values.cbegin(); it != config_values.cend();)
+{
+    if (it->first == key)
+    {
+        it = config_values.erase(it);
+    }
+    else
+    {
+        ++it;
+    }
+}} {}
+}
+
+Function {get_config_value(const std::string key)} {open private return_type {std::string}
+} {
+  code {for (auto it = config_values.begin(); it != config_values.end(); ++it) {
+	if (it->first == key)
+		return it->second;
+}
+return "";} {}
+}
+
+Function {set_config_value(const std::string key, const std::string value, bool overwrite)} {open private
+} {
+  code {if (overwrite) {
+	for (auto it = config_values.begin(); it != config_values.end(); ++it) {
+ 	   if (it->first == key)
+ 	   	it->second = value;
+  	  	return;
+	}
+}
+std::pair<std::string, std::string> kv_pair(key, value);
+config_values.push_back(kv_pair);} {}
+}
+
+Function {read_config()} {open private
+} {
+  code {const char *homedir;
+
+if ((homedir = getenv("HOME")) == NULL) {
+    homedir = getpwuid(getuid())->pw_dir;
+}
+
+std::string homedir_string(homedir);
+
+std::ifstream config_file(homedir_string + "/.basilisk_ii_prefs");} {}
+  codeblock {while(!config_file.eof())} {open
+  } {
+    code {std::string key;
+std::getline(config_file, key, ' ');
+if (key == "screen") { // very ugly hack
+	std::string value1;
+	std::getline(config_file, value1, '/');
+	set_config_value(key + "1", value1, false);
+	std::string value2;
+	std::getline(config_file, value2, '/');
+	set_config_value(key + "2", value2, false);
+	std::string value3;
+	std::getline(config_file, value3);
+	set_config_value(key + "3", value3, false);
+}
+else {
+	std::string value;
+	std::getline(config_file, value);
+	set_config_value(key, value, false);
+}} {}
+  }
+}
+
+Function {write_config()} {open
+} {
+  code {const char *homedir;
+
+if ((homedir = getenv("HOME")) == NULL) {
+    homedir = getpwuid(getuid())->pw_dir;
+}
+
+std::string homedir_string(homedir);
+
+std::ofstream config_file(homedir_string + "/.basilisk_ii_prefs");
+
+std::string value1;
+std::string value2;
+std::string value3;
+
+for (auto it = config_values.begin(); it != config_values.end(); ++it) {
+	if (it->first == "screen1")
+		value1 = it->second;
+	else if (it->first == "screen2")
+		value2 = it->second;
+	else if (it->first == "screen3")
+		value3 = it->second;
+	else if (it->first != "")
+		config_file << it->first << " " << it->second << std::endl;
+	if (value1 != "" && value2 != "" && value3 != "") {
+		config_file << "screen" << " " << value1 << "/" << value2 << "/" << value3 << std::endl;
+		value1 = "";
+		value2 = "";
+		value3 = "";
+	}
+}} {selected
+  }
+}
+
+Function {make_window()} {open private
+} {
+  Fl_Window {} {
+    label {Basilisk II Settings}
+    callback {write_config();
+o->hide();} open
+    xywh {320 164 555 317} type Double size_range {555 317 555 317} visible
+  } {
+    Fl_Tabs {} {open
+      xywh {0 0 555 320} labelsize 12
+    } {
+      Fl_Group {} {
+        label Volumes open
+        xywh {0 25 555 295} labelsize 12
+      } {
+        Fl_Browser disk_browser {
+          private xywh {0 25 555 135} type Hold when 1
+          code0 {for (auto it = config_values.begin(); it != config_values.end(); ++it) if (it->first == "disk") o->add(it->second.c_str());}
+        }
+        Fl_Button {} {
+          label {Add…}
+          callback {Fl_File_Chooser chooser(".", nullptr, Fl_File_Chooser::MULTI, "Choose disk image");
+chooser.show();
+while (chooser.shown()) Fl::wait();
+for (int i = chooser.count(); i; i--) disk_browser->add(chooser.value(i));
+remove_all_of_key("disk");
+for (int i = disk_browser->size(); i; i--) set_config_value("disk", disk_browser->text(i), false);}
+          xywh {0 160 185 25}
+        }
+        Fl_Button {} {
+          label {Create…}
+          xywh {185 160 185 25} deactivate
+        }
+        Fl_Button {} {
+          label Remove
+          callback {for (int i = disk_browser->size(); i; i--) if (disk_browser->selected(i)) disk_browser->remove(i);
+remove_all_of_key("disk");
+for (int i = disk_browser->size(); i; i--) set_config_value("disk", disk_browser->text(i), false);}
+          xywh {370 160 185 25}
+        }
+        Fl_Input extfs_path_input {
+          label {Unix Root}
+          callback {set_config_value("extfs", o->value(), true);}
+          private tooltip {root path of ExtFS} xywh {70 185 460 25} when 1
+          code0 {o->value(get_config_value("extfs").c_str());}
+        }
+        Fl_Choice {} {
+          label {Boot From} open
+          tooltip {boot driver number} xywh {70 210 485 25} down_box BORDER_BOX when 1
+          code0 {o->value(get_config_value("bootdriver") == "-63");}
+        } {
+          MenuItem {} {
+            label Any
+            callback {set_config_value("bootdriver", "0", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {CD-ROM}
+            callback {set_config_value("bootdriver", "-63", true);}
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Check_Button {} {
+          label {Disable CD-ROM Driver}
+          callback {set_config_value("nocdrom", o->value() ? "true" : "false", true);}
+          tooltip {don't install CD-ROM driver} xywh {0 235 555 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("nocdrom") == "true");}
+        }
+        Fl_Button {} {
+          label {…}
+          callback {Fl_File_Chooser chooser(".", nullptr, Fl_File_Chooser::DIRECTORY, "Choose extfs");
+chooser.show();
+while (chooser.shown()) Fl::wait();
+for (int i = chooser.count(); i; i--) extfs_path_input->value(chooser.value(i));
+set_config_value("extfs", extfs_path_input->value(), true);}
+          xywh {530 185 25 25}
+        }
+      }
+      Fl_Group {} {
+        label SCSI open
+        xywh {0 25 555 292} labelsize 12 hide
+      } {
+        Fl_Input {} {
+          label {ID 0}
+          callback {set_config_value("scsi0", o->value(), true);}
+          tooltip {SCSI target for Mac SCSI ID 0} xywh {35 25 520 25}
+          code0 {o->value(get_config_value("scsi0").c_str());}
+        }
+        Fl_Input {} {
+          label {ID 1}
+          callback {set_config_value("scsi1", o->value(), true);}
+          tooltip {SCSI target for Mac SCSI ID 1} xywh {35 50 520 25}
+          code0 {o->value(get_config_value("scsi1").c_str());}
+        }
+        Fl_Input {} {
+          label {ID 2}
+          callback {set_config_value("scsi2", o->value(), true);}
+          tooltip {SCSI target for Mac SCSI ID 2} xywh {35 75 520 25}
+          code0 {o->value(get_config_value("scsi2").c_str());}
+        }
+        Fl_Input {} {
+          label {ID 3}
+          callback {set_config_value("scsi3", o->value(), true);}
+          tooltip {SCSI target for Mac SCSI ID 3} xywh {35 100 520 25}
+          code0 {o->value(get_config_value("scsi3").c_str());}
+        }
+        Fl_Input {} {
+          label {ID 4}
+          callback {set_config_value("scsi4", o->value(), true);}
+          tooltip {SCSI target for Mac SCSI ID 4} xywh {35 125 520 25}
+          code0 {o->value(get_config_value("scsi4").c_str());}
+        }
+        Fl_Input {} {
+          label {ID 5}
+          callback {set_config_value("scsi5", o->value(), true);}
+          tooltip {SCSI target for Mac SCSI ID 5} xywh {35 150 520 25}
+          code0 {o->value(get_config_value("scsi5").c_str());}
+        }
+        Fl_Input {} {
+          label {ID 6}
+          callback {set_config_value("scsi6", o->value(), true);}
+          tooltip {SCSI target for Mac SCSI ID 6} xywh {35 175 520 25}
+          code0 {o->value(get_config_value("scsi6").c_str());}
+        }
+      }
+      Fl_Group {} {
+        label {Graphics/Sound} open
+        xywh {0 25 555 292} labelsize 12 hide
+      } {
+        Fl_Choice {} {
+          label {Video Type} open
+          xywh {145 25 410 25} down_box BORDER_BOX
+          code0 {o->value(get_config_value("screen1") == "dga");}
+        } {
+          MenuItem {} {
+            label Window
+            callback {set_config_value("screen1", "win", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label Fullscreen
+            callback {set_config_value("screen1", "dga", true);}
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Choice {} {
+          label {Window Refresh Rate} open
+          tooltip {number of frames to skip in refreshed video modes} xywh {145 50 410 25} down_box BORDER_BOX
+          code0 {switch (std::stoi(get_config_value("frameskip").c_str())) {case 12: o->value(0); break;case 8: o->value(1); break;case 6: o->value(2); break;case 4: o->value(3); break;case 2: o->value(4); break;case 1: o->value(5); break;default: o->value(6); break;}}
+        } {
+          MenuItem {} {
+            label {5 Hz}
+            callback {set_config_value("frameskip", "12", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {7.5 Hz}
+            callback {set_config_value("frameskip", "8", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {10 Hz}
+            callback {set_config_value("frameskip", "6", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {15 Hz}
+            callback {set_config_value("frameskip", "4", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {30 Hz}
+            callback {set_config_value("frameskip", "2", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {60 Hz}
+            callback {set_config_value("frameskip", "1", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label Dynamic
+            callback {set_config_value("frameskip", "0", true);}
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Input_Choice {} {
+          label Width
+          callback {set_config_value("screen2", o->value(), true);} open
+          xywh {145 75 410 25} when 1
+          code0 {o->value((std::stoi(get_config_value("screen2").c_str()) == 0) ? "Maximum" : get_config_value("screen2").c_str());}
+        } {
+          MenuItem {} {
+            label 512
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 640
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 800
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 1024
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label Maximum
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Input_Choice {} {
+          label Height
+          callback {set_config_value("screen3", o->value(), true);} open
+          xywh {145 100 410 25} when 1
+          code0 {o->value((std::stoi(get_config_value("screen3").c_str()) == 0) ? "Maximum" : get_config_value("screen3").c_str());}
+        } {
+          MenuItem {} {
+            label 384
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 480
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 600
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 768
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label Maximum
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Check_Button {} {
+          label {Disable Sound Output}
+          callback {set_config_value("nosound", o->value() ? "true" : "false", true);}
+          tooltip {don't enable sound output} xywh {145 125 410 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("nosound") == "true");}
+        }
+        Fl_Input {} {
+          label {Audio Output Device}
+          callback {set_config_value("dsp", o->value(), true);}
+          tooltip {audio output (dsp) device name} xywh {145 150 410 25}
+          code0 {o->value(get_config_value("dsp").c_str());}
+        }
+        Fl_Input {} {
+          label {Audio Mixer Device}
+          callback {set_config_value("mixer", o->value(), true);}
+          tooltip {audio mixer device name} xywh {145 175 410 25}
+          code0 {o->value(get_config_value("mixer").c_str());}
+        }
+      }
+      Fl_Group {} {
+        label {Keyboard/Mouse} open
+        xywh {0 25 555 292} labelsize 12 hide
+      } {
+        Fl_Check_Button {} {
+          label {Use Raw Keycodes}
+          callback {set_config_value("keycodes", o->value() ? "true" : "false", true);}
+          tooltip {use keycodes rather than keysyms to decode keyboard} xywh {150 25 405 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("keycodes") == "true");}
+        }
+        Fl_Input keycodefile_input {
+          label {Use Raw Keycodes}
+          callback {set_config_value("keycodefile", o->value(), true);}
+          private tooltip {path of keycode translation file} xywh {150 50 380 25} when 1
+          code0 {o->value(get_config_value("keycodefile").c_str());}
+        }
+        Fl_Choice {} {
+          label {Mouse Wheel Function} open
+          tooltip {mouse wheel support mode (0=page up/down, 1=cursor up/down)} xywh {150 75 405 25} down_box BORDER_BOX
+          code0 {o->value(get_config_value("mousewheelmode") == "1");}
+        } {
+          MenuItem {} {
+            label {Page Up/Down}
+            callback {set_config_value("mousewheelmode", "0", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {Cursor Up/Down}
+            callback {set_config_value("mousewheelmode", "1", true);}
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Spinner {} {
+          label {Lines To Scroll}
+          callback {set_config_value("mousewheellines", std::to_string(o->value()), true);}
+          tooltip {number of lines to scroll in mouse wheel mode 1} xywh {150 100 405 25} when 1 maximum 1000
+          code0 {o->value(std::stod(get_config_value("mousewheellines")));}
+        }
+        Fl_Button {} {
+          label {…}
+          callback {Fl_File_Chooser chooser(".", nullptr, Fl_File_Chooser::SINGLE, "Choose keycodes file");
+chooser.show();
+while (chooser.shown()) Fl::wait();
+for (int i = chooser.count(); i; i--) keycodefile_input->value(chooser.value(i));
+set_config_value("keycodefile", keycodefile_input->value(), true);}
+          xywh {530 50 25 25}
+        }
+      }
+      Fl_Group {} {
+        label {Serial/Network} open
+        xywh {0 25 555 292} labelsize 12 hide
+      } {
+        Fl_Input_Choice {} {
+          label {Modem Port}
+          callback {set_config_value("seriala", o->value(), true);} open
+          tooltip {device name of Mac serial port A} xywh {120 25 435 25}
+          code0 {o->value(get_config_value("seriala").c_str());}
+        } {}
+        Fl_Input_Choice {} {
+          label {Printer Port}
+          callback {set_config_value("serialb", o->value(), true);} open
+          tooltip {device name of Mac serial port B} xywh {120 50 435 25}
+          code0 {o->value(get_config_value("serialb").c_str());}
+        } {}
+        Fl_Input_Choice {} {
+          label {Ethernet Interface}
+          callback {set_config_value("ether", o->value(), true);} open
+          tooltip {device name of Mac ethernet adapter} xywh {120 75 435 25}
+          code0 {o->value(get_config_value("ether").c_str());}
+        } {}
+        Fl_Check_Button {} {
+          label {Tunnel MacOS Networking over UDP}
+          callback {set_config_value("udptunnel", o->value() ? "true" : "false", true);}
+          tooltip {tunnel all network packets over UDP} xywh {120 100 435 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("udptunnel") == "true");}
+        }
+        Fl_Spinner {} {
+          label {UDP Port Number}
+          callback {set_config_value("udpport", std::to_string(o->value()), true);}
+          tooltip {IP port number for tunneling} xywh {120 125 435 25} maximum 65535
+          code0 {o->value(std::stod(get_config_value("udpport")));}
+        }
+      }
+      Fl_Group {} {
+        label {Memory/Misc} open
+        xywh {0 25 555 292} labelsize 12 hide
+      } {
+        Fl_Input_Choice {} {
+          label {MacOS RAM Size (MB)}
+          callback {set_config_value("ramsize", std::to_string(std::stoi(o->value()) << 20), true);} open
+          tooltip {size of Mac RAM in bytes} xywh {155 25 400 25}
+          code0 {o->value(std::to_string(std::stoi(get_config_value("ramsize")) >> 20).c_str());}
+        } {
+          MenuItem {} {
+            label 2
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 4
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 8
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 16
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 32
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 64
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 128
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 256
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 512
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 1024
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Choice {} {
+          label {Mac Model ID} open
+          tooltip {Mac Model ID (Gestalt Model ID minus 6)} xywh {155 50 400 25} down_box BORDER_BOX
+          code0 {o->value(get_config_value("modelid") == "14");}
+        } {
+          MenuItem {} {
+            label {Mac IIci (MacOS 7.x)}
+            callback {set_config_value("modelid", "5", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {Quadra 900 (MacOS 8.x)}
+            callback {set_config_value("modelid", "14", true);}
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Choice {} {
+          label {CPU Type} open
+          tooltip {CPU type (0 = 68000, 1 = 68010 etc.)} xywh {155 75 400 25} down_box BORDER_BOX
+          code0 {o->value((get_config_value("cpu") == "2") ? ((get_config_value("fpu") == "true") ? 1 : 0) : ((get_config_value("cpu") == "3") ? ((get_config_value("fpu") == "true") ? 3 : 2) : 4));}
+        } {
+          MenuItem {} {
+            label 68020
+            callback {set_config_value("cpu", "2", true);
+set_config_value("fpu", "false", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {68020 with FPU}
+            callback {set_config_value("cpu", "2", true);
+set_config_value("fpu", "true", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 68030
+            callback {set_config_value("cpu", "3", true);
+set_config_value("fpu", "false", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label {68030 with FPU}
+            callback {set_config_value("cpu", "3", true);
+set_config_value("fpu", "true", true);}
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 68040
+            callback {set_config_value("cpu", "4", true);
+set_config_value("fpu", "true", true);}
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Input rom_input {
+          label {ROM File}
+          callback {set_config_value("rom", keycodefile_input->value(), true);}
+          private tooltip {path of ROM file} xywh {155 100 375 25}
+          code0 {o->value(get_config_value("rom").c_str());}
+        }
+        Fl_Button {} {
+          label {…}
+          callback {Fl_File_Chooser chooser(".", nullptr, Fl_File_Chooser::SINGLE, "Choose rom file");
+chooser.show();
+while (chooser.shown()) Fl::wait();
+for (int i = chooser.count(); i; i--) rom_input->value(chooser.value(i));
+set_config_value("rom", keycodefile_input->value(), true);}
+          xywh {530 100 25 25}
+        }
+        Fl_Check_Button {} {
+          label {Don't Use CPU When Idle}
+          callback {set_config_value("idlewait", o->value() ? "true" : "false", true);}
+          tooltip {sleep when idle} xywh {155 125 400 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("idlewait") == "true");}
+        }
+        Fl_Check_Button {} {
+          label {Ignore Illegal Memory Accesses}
+          callback {set_config_value("ignoresegv", o->value() ? "true" : "false", true);}
+          tooltip {ignore illegal memory accesses} xywh {155 150 400 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("ignoresegv") == "true");}
+        }
+      }
+      Fl_Group {} {
+        label {JIT Compiler} open
+        xywh {0 25 555 292} labelsize 12 hide
+      } {
+        Fl_Check_Button {} {
+          label {Enable JIT Compiler}
+          callback {set_config_value("jit", o->value() ? "true" : "false", true);}
+          tooltip {enable JIT compiler} xywh {185 25 370 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("jit") == "true");}
+        }
+        Fl_Check_Button {} {
+          label {Compile FPU Instructions}
+          callback {set_config_value("jitfpu", o->value() ? "true" : "false", true);}
+          tooltip {enable JIT compilation of FPU instructions} xywh {185 50 370 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("jitfpu") == "true");}
+        }
+        Fl_Input_Choice {} {
+          label {Translation Cache Size (KB)}
+          callback {set_config_value("jitcachesize", o->value(), true);} open
+          tooltip {translation cache size in KB} xywh {185 75 370 25}
+          code0 {o->value(get_config_value("jitcachesize").c_str());}
+        } {
+          MenuItem {} {
+            label 2048
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 4096
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 8192
+            xywh {0 0 100 20}
+          }
+          MenuItem {} {
+            label 16384
+            xywh {0 0 100 20}
+          }
+        }
+        Fl_Check_Button {} {
+          label {Enable lazy invalidation of translation cache}
+          callback {set_config_value("jitlazyflush", o->value() ? "true" : "false", true);}
+          tooltip {enable lazy invalidation of translation cache} xywh {185 100 370 25} down_box DOWN_BOX when 1
+          code0 {o->value(get_config_value("jitlazyflush") == "true");}
+        }
+        Fl_Check_Button {} {
+          label {Translate through constant jumps (inline blocks)}
+          callback {set_config_value("jitinline", o->value() ? "true" : "false", true);}
+          tooltip {enable translation through constant jumps} xywh {185 125 370 25} down_box DOWN_BOX
+          code0 {o->value(get_config_value("jitinline") == "true");}
+        }
+      }
+    }
+  }
+}
+
+Function {} {open return_type int
+} {
+  code {read_config();
+Fl_Double_Window *window = make_window();
+window->show(argc, argv);} {}
+}
